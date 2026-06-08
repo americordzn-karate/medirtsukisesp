@@ -393,7 +393,7 @@ function enviarResultado() {
     puntos        : tsukiCount,
     fig           : fotoBase64 || ""
   });
-
+console.log("fig al enviar:", fotoBase64 ? fotoBase64.length + " caracteres" : "VACÍO");
   fetch(appScriptURL, {
     method  : "POST",
     mode    : "no-cors",
