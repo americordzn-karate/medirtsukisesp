@@ -389,8 +389,9 @@ function enviarResultado() {
 
   const payload = JSON.stringify({
     nombre_alumno : paramNombre || document.getElementById('atleta-nombre').value,
-    nombre_reto   : paramReto   || "TSUKIS EN 10 SEGUNDOS",
-    puntos        : tsukiCount
+    nombre_reto   : paramReto   || "TSUKIS EN 10 SEG",
+    puntos        : tsukiCount,
+    fig           : fotoBase64 || ""
   });
 
   fetch(appScriptURL, {
