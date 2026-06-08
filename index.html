@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Senshi-Kan AI - 10s Gyaku Tsuki</title>
+  
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    body { margin: 0; background: #000; color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    #top-controls { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 300; display: flex; flex-direction: column; gap: 6px; }
+    .btn-row { display: flex; gap: 6px; }
+    #status-display { background: rgba(30,30,30,0.95); padding: 12px; border-radius: 10px; border: 3px solid #FFD700; font-size: 16px; font-weight: bold; text-align: center; flex-grow: 2; text-transform: uppercase; transition: background 0.2s ease, color 0.2s ease; }
+    .selector-group { display: flex; flex-direction: column; gap: 3px; background: rgba(0,0,0,0.8); padding: 4px; border-radius: 8px; border: 1px solid #444; }
+    .opt-btn { padding: 4px 8px; border: 1px solid #FFD700; background: #222; color: #FFD700; border-radius: 5px; font-size: 9px; font-weight: bold; cursor: pointer; text-align: center; white-space: nowrap; }
+    .opt-btn.active { background: #FFD700; color: #000; }
+    .config-box { background: rgba(0,0,0,0.85); padding: 6px; border-radius: 10px; border: 1px solid #FFD700; display: flex; flex-wrap: wrap; justify-content: space-around; align-items: center; gap: 5px; }
+    .input-field { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: bold; color: #FFD700; }
+    input { padding: 4px; border-radius: 4px; border: 1px solid #FFD700; background: #000; color: #FFD700; text-align: center; }
+    #atleta-nombre { width: 120px; text-align: left; }
+    
+    #main-view { position: relative; flex-grow: 1; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+    #canvas-container { position: relative; display: flex; align-items: center; justify-content: center; max-height: 70vh; width: 100%; }
+    #output_canvas { max-width: 100%; max-height: 100%; }
+    .mirror { transform: scaleX(-1); }
+    
+    #live-angle-container { width: 90%; max-width: 450px; background: rgba(15,15,15,0.95); border: 1px solid #333; border-radius: 8px; padding: 12px; box-sizing: border-box; margin-top: 12px; z-index: 400; text-align: center; }
+    .angle-label { font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+    #angle-number { font-size: 38px; font-weight: bold; color: #FFD700; font-family: monospace; transition: color 0.1s ease; }
+
+    button.action-btn { padding: 12px; font-size: 13px; font-weight: bold; border: none; border-radius: 8px; text-transform: uppercase; cursor: pointer; flex: 1; }
+    .btn-camera { background: #FFD700; color: #000; }
+    .btn-start { background: #fff; color: #000; display: none; }
+    
+    /* PANTALLA REPORTE FINAL */
+    #results-panel { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); display: none; z-index: 500; overflow-y: auto; padding: 30px 15px; box-sizing: border-box; border-top: 5px solid #FFD700; text-align: center; }
+    .score-box { background: #111; border: 3px solid #FFD700; border-radius: 15px; padding: 25px; margin: 20px auto; max-width: 280px; }
+    .score-number { font-size: 64px; font-weight: bold; color: #FFD700; margin: 10px 0; }
+    #feedback-text { color: #fff; font-size: 15px; font-style: italic; margin: 15px auto; max-width: 320px; min-height: 45px; line-height: 1.4; }
+    #input_video { display: none; }
+  </style>
+</head>
+<body>
+
+  <div id="top-controls">
+    <div class="btn-row">
+        <div id="status-display">TEST 10s GYAKU TSUKI</div>
+        <div class="selector-group">
+            <div id="btn-cam-front" class="opt-btn active" onclick="switchCam('user')">FRONT</div>
+            <div id="btn-cam-back" class="opt-btn" onclick="switchCam('environment')">BACK</div>
+        </div>
+        <div class="selector-group">
+            <div id="btn-left" class="opt-btn" onclick="selectArm('L')">IZQ</div>
+            <div id="btn-right" class="opt-btn active" onclick="selectArm('R')">DER</div>
+        </div>
+    </div>
+    <div class="config-box">
+        <div class="input-field">ALUMNO: <input type="text" id="atleta-nombre" value="KARATEKA"></div>
+        <div class="input-field">BRAZO(CM): <input type="number" id="antebrazo-cm" style="width:40px;" value="25"></div>
+        <button id="btn-camera" class="action-btn btn-camera" style="max-width: 95px; padding: 6px; background:#555; color:#999; cursor:not-allowed;" onclick="activarCamara()" disabled>1. CONECTAR</button>
+    </div>
+    <button id="btn-start-test" class="action-btn btn-start" onclick="prepararTest()">2. INICIAR TEST (HAJIME)</button>
+  </div>
+  
+  <div id="main-view">
+    <div id="canvas-container">
+        <video id="input_video" playsinline muted></video>
+        <canvas id="output_canvas" class="mirror"></canvas>
+    </div>
+
+    <div id="live-angle-container">
+        <div id="angle-arm-text" class="angle-label">ÁNGULO CODO (DER)</div>
+        <div id="angle-number">0°</div>
+    </div>
+    
+    <div id="results-panel">
+      <h2 style="color:#FFD700; margin:0; font-size:22px; text-transform:uppercase;">FIN DEL TEST</h2>
+      <p id="report-atleta" style="color:#aaa; font-size:14px; margin:5px 0;"></p>
+      
+      <div class="score-box">
+         <div style="font-size: 14px; letter-spacing: 1px; color:#fff;">TSUKIS VALIDADOS</div>
+         <div id="final-count" class="score-number">0</div>
+         <div style="font-size: 11px; color:#10b981; font-weight:bold;">TÉCNICA + BASE CORRECTA</div>
+      </div>
+
+      <div id="feedback-text"></div>
+
+      <button class="action-btn btn-camera" onclick="regresarPortal()" style="width:100%; max-width:280px; padding:12px; margin-top:10px;">VOLVER AL PORTAL</button>
+    </div>
+  </div>
+
+  <script>
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const statusText = document.getElementById('status-display');
+    const angleNumberText = document.getElementById('angle-number');
+    const angleArmText = document.getElementById('angle-arm-text');
+
+    let modo = "OFF", selectedArm = "R", facingMode = "user", tsukiCount = 0;
+    let pxPorCm = 0, currentLandmarks = null;
+    
+    let golpeExtendido = false; 
+    let baseDesplazada = false;
+    let posicionInicialPieApoyo = null;
+    let posicionCalibracionCamaraPie = null; 
+
+    let audioCtx = null;
+    function initAudio() {
+        if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+    }
+
+    function playBeep(freq, dur, type="sine", vol=0.8) {
+        initAudio(); if(!audioCtx) return;
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime); 
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+        osc.start(); osc.stop(audioCtx.currentTime + dur);
+    }
+
+    function decir(texto, cancelarPrevio = false) {
+        if ('speechSynthesis' in window) {
+            if (cancelarPrevio) { window.speechSynthesis.cancel(); }
+            const utterance = new SpeechSynthesisUtterance(texto);
+            utterance.lang = 'es-MX';
+            utterance.rate = 1.1;
+            utterance.pitch = 1.0; 
+            window.speechSynthesis.speak(utterance);
+        }
+    }
+
+    const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+    pose.setOptions({ modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
+    function switchCam(mode) {
+      if (modo !== "OFF") return;
+      facingMode = mode;
+      document.getElementById('btn-cam-front').classList.toggle('active', mode === 'user');
+      document.getElementById('btn-cam-back').classList.toggle('active', mode === 'environment');
+      canvasElement.classList.toggle('mirror', mode === 'user');
+    }
+
+    function selectArm(side) {
+      if (modo !== "OFF" && modo !== "ESPERANDO_INICIO") return;
+      selectedArm = side;
+      document.getElementById('btn-left').classList.toggle('active', side === 'L');
+      document.getElementById('btn-right').classList.toggle('active', side === 'R');
+      angleArmText.innerText = `ÁNGULO CODO (${side === 'R' ? 'DER' : 'IZQ'})`;
+    }
+
+    pose.onResults((res) => {
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+      canvasCtx.save(); canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(res.image, 0, 0, canvasElement.width, canvasElement.height);
+      
+      if (res.poseLandmarks) {
+        currentLandmarks = res.poseLandmarks;
+        const lm = currentLandmarks;
+        
+        const pArm = (selectedArm === 'R') ? [12, 14, 16] : [11, 13, 15];
+        const hombro = lm[pArm[0]], codo = lm[pArm[1]], muñeca = lm[pArm[2]];
+
+        const idxPieApoyo = (selectedArm === 'R') ? 31 : 32; 
+        const pieApoyo = lm[idxPieApoyo];
+
+        pxPorCm = Math.hypot((muñeca.x - codo.x) * canvasElement.width, (muñeca.y - codo.y) * canvasElement.height) / parseFloat(document.getElementById('antebrazo-cm').value);
+        
+        let angCodo = Math.abs((Math.atan2(muñeca.y - codo.y, muñeca.x - codo.x) - Math.atan2(hombro.y - codo.y, hombro.x - codo.x)) * 180 / Math.PI);
+        if (angCodo > 180) angCodo = 360 - angCodo;
+
+        angleNumberText.innerText = `${Math.round(angCodo)}°`;
+        
+        if (angCodo >= 175) {
+            angleNumberText.style.color = "#10b981";
+        } else if (angCodo <= 45) {
+            angleNumberText.style.color = "#0284c7";
+        } else {
+            angleNumberText.style.color = "#FFD700";
+        }
+
+        canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = "#FFD700";
+        canvasCtx.beginPath(); canvasCtx.moveTo(hombro.x * canvasElement.width, hombro.y * canvasElement.height);
+        canvasCtx.lineTo(codo.x * canvasElement.width, codo.y * canvasElement.height);
+        canvasCtx.lineTo(muñeca.x * canvasElement.width, muñeca.y * canvasElement.height); canvasCtx.stroke();
+        
+        canvasCtx.fillStyle = "#00E5FF"; canvasCtx.beginPath();
+        canvasCtx.arc(pieApoyo.x * canvasElement.width, pieApoyo.y * canvasElement.height, 8, 0, 2 * Math.PI); canvasCtx.fill();
+
+        drawLandmarks(canvasCtx, [hombro, codo, muñeca], {color: "#FFD700", lineWidth: 2});
+
+        if (modo === "ESPERANDO_INICIO") {
+            if (!posicionCalibracionCamaraPie) {
+                posicionCalibracionCamaraPie = { x: pieApoyo.x, y: pieApoyo.y };
+            } else {
+                let elevacionPieCm = (posicionCalibracionCamaraPie.y - pieApoyo.y) * canvasElement.height / pxPorCm;
+                if (elevacionPieCm >= 15.0) {
+                    prepararTest();
+                }
+            }
+        }
+
+        if (modo === "TEST_ACTIVO") {
+          if (!golpeExtendido && angCodo >= 175) {
+              golpeExtendido = true;
+              if (posicionInicialPieApoyo) {
+                  let distanciaPieX = Math.abs(pieApoyo.x - posicionInicialPieApoyo.x) * canvasElement.width / pxPorCm;
+                  if (distanciaPieX >= 5.0) {
+                      baseDesplazada = true;
+                  }
+              }
+          }
+
+          if (golpeExtendido && angCodo <= 45) {
+              if (baseDesplazada) {
+                  tsukiCount++;
+                  statusText.innerText = `TSUKIS: ${tsukiCount}`;
+                  playBeep(1000, 0.12, "sine", 1.0);
+              } else {
+                  playBeep(250, 0.15, "triangle", 0.4);
+              }
+              golpeExtendido = false;
+              baseDesplazada = false;
+          }
+        }
+      }
+      canvasCtx.restore();
+    });
+
+    function prepararTest() {
+        if (modo === "PREPARACION" || modo === "TEST_ACTIVO") return; 
+        modo = "PREPARACION";
+        initAudio(); let cuenta = 5;
+        document.getElementById('btn-start-test').style.display = "none";
+        
+        decir("Prepárate");
+
+        const timer = setInterval(() => {
+            statusText.style.background = "#b45309";
+            statusText.style.color = "#fff";
+            statusText.innerText = `¡PREPÁRATE!: ${cuenta}`;
+            
+            if (cuenta > 0) { decir(cuenta.toString()); }
+            cuenta--;
+            
+            if(cuenta < 0) { 
+                clearInterval(timer); 
+                iniciarTest10Segundos(); 
+            }
+        }, 1000);
+    }
+
+    function iniciarTest10Segundos() {
+        tsukiCount = 0;
+        golpeExtendido = false;
+        baseDesplazada = false;
+        modo = "TEST_ACTIVO";
+
+        if (currentLandmarks) {
+            const idxPieApoyo = (selectedArm === 'R') ? 31 : 32;
+            posicionInicialPieApoyo = { x: currentLandmarks[idxPieApoyo].x, y: currentLandmarks[idxPieApoyo].y };
+        }
+
+        statusText.style.background = "#064e3b";
+        statusText.style.color = "#fff";
+        statusText.innerText = `¡HAJIME! TSUKIS: 0`;
+        
+        decir("¡Hajime!", true);
+
+        let tiempoRestante = 10.5;
+        const cronometro = setInterval(() => {
+            tiempoRestante--;
+            if (modo === "TEST_ACTIVO") {
+                statusText.innerText = `TIEMPO: ${tiempoRestante}s | TSUKIS: ${tsukiCount}`;
+            }
+
+            if (tiempoRestante <= 0) {
+                clearInterval(cronometro);
+                finalizarTest();
+            }
+        }, 1000);
+    }
+
+    function finalizarTest() {
+        modo = "FIN";
+        decir("¡Yame!", true);
+
+        statusText.style.background = "#1a1a1a";
+        statusText.style.color = "#FFD700";
+        statusText.innerText = "¡YAME! TEST COMPLETADO";
+
+        // Obtener el nombre ingresado en el input
+        const nombreAtleta = document.getElementById('atleta-nombre').value;
+        const nombreMayusculas = nombreAtleta.toUpperCase();
+        
+        document.getElementById('report-atleta').innerText = `ALUMNO: ${nombreMayusculas} (BRAZO ${selectedArm === 'R' ? 'DERECHO' : 'IZQUIERDO'})`;
+        document.getElementById('final-count').innerText = tsukiCount;
+        
+        // Evaluar las frases condicionantes según el rendimiento del alumno
+        let fraseCondicional = "";
+        if (tsukiCount > 10) {
+            fraseCondicional = "¡Felicidades! Eres una máquina de Yako Tsukis, casi casi como el sensei Américo.";
+        } else if (tsukiCount >= 8 && tsukiCount <= 10) {
+            fraseCondicional = "¡Bien hecho campeón!, te cansaste?";
+        } else if (tsukiCount >= 5 && tsukiCount <= 7) {
+            fraseCondicional = "Definitivamente hay que seguir trabajando para mejorar esa cuenta. Vuelve a intentarlo";
+        } else if (tsukiCount >= 2 && tsukiCount <= 4) {
+            fraseCondicional = "Bueno... ¡espero que el sensei no te haya visto!";
+        } else if (tsukiCount === 1) {
+            fraseCondicional = "Ah caray! ¿Qué te pasó?, ¿Te dio algún calambre o qué?";
+        } else {
+            fraseCondicional = "¿No has pensado en tocar guitarra mejor?";
+        }
+
+        // --- CONSTRUCCIÓN DEL NUEVO COMANDO DE VOZ PERSONALIZADO ---
+        const mensajeVozFinal = `Muy bien ${nombreAtleta}. Prueba finalizada, conseguiste ${tsukiCount} golpes exitosos. ${fraseCondicional}`;
+        
+        document.getElementById('feedback-text').innerText = fraseCondicional;
+        document.getElementById('results-panel').style.display = "block";
+      enviarResultado();
+
+        // Breve pausa táctica después del Yame para procesar la voz limpia
+        setTimeout(() => {
+            decir(mensajeVozFinal, false);
+        }, 800);
+    }
+
+    async function activarCamara() {
+      initAudio();
+      decir(""); 
+      posicionCalibracionCamaraPie = null;
+      modo = "ESPERANDO_INICIO";
+      
+      const camera = new Camera(videoElement, { 
+          onFrame: async () => { await pose.send({image: videoElement}); }, 
+          facingMode: facingMode, 
+          width: 640, 
+          height: 480 
+      });
+      camera.start(); 
+      document.getElementById('btn-camera').style.display = "none"; 
+      document.getElementById('btn-start-test').style.display = "block";
+      statusText.innerText = "MUEVA EL PIE O PRESIONE INICIAR PARA ARRANCAR";
+    }
+    // ── LECTURA DE PARÁMETROS DESDE URL ──────────────────────────
+const urlParams = new URLSearchParams(window.location.search);
+const paramNombre   = urlParams.get('nombre');
+const paramReto     = urlParams.get('reto');
+const paramEstatura = urlParams.get('estatura');
+
+if (paramNombre) {
+  document.getElementById('atleta-nombre').value = paramNombre;
+  document.getElementById('atleta-nombre').readOnly = true;
+}
+
+if (paramEstatura) {
+  const largoBrazo = (parseFloat(paramEstatura) * 0.165).toFixed(1);
+  document.getElementById('antebrazo-cm').value = largoBrazo;
+  document.getElementById('antebrazo-cm').readOnly = true;
+}
+// ─────────────────────────────────────────────────────────────
+ // ── ENVÍO DE RESULTADOS AL APPSCRIPT ─────────────────────────
+function enviarResultado() {
+  const appScriptURL = "https://script.google.com/macros/s/AKfycbwX5w8iiwkJVbGtpz-5f20U9jue2MC0vouE3blkHXo9CIMqg9bvCZrAYE8WKxH4gXGWzg/exec";
+
+  const payload = JSON.stringify({
+    nombre_alumno : paramNombre || document.getElementById('atleta-nombre').value,
+    nombre_reto   : paramReto   || "TSUKIS EN 10 SEGUNDOS",
+    puntos        : tsukiCount
+  });
+
+  fetch(appScriptURL, {
+    method  : "POST",
+    mode    : "no-cors",
+    headers : { "Content-Type": "application/json" },
+    body    : payload
+  })
+  .then(() => {
+    console.log("Resultado enviado correctamente.");
+  })
+  .catch((err) => {
+    console.error("Error al enviar resultado:", err);
+  });
+}
+// ─────────────────────────────────────────────────────────────
+
+// ── VERIFICACIÓN DE INTENTOS DIARIOS ─────────────────────────
+async function verificarIntentosHoy() {
+  const appScriptURL = "https://script.google.com/macros/s/AKfycbwX5w8iiwkJVbGtpz-5f20U9jue2MC0vouE3blkHXo9CIMqg9bvCZrAYE8WKxH4gXGWzg/exec";
+  const nombreReto = paramReto || "TSUKIS EN 10 SEGUNDOS";
+  const nombreAlumno = paramNombre || document.getElementById('atleta-nombre').value;
+
+  try {
+    const res = await fetch(appScriptURL);
+    const data = await res.json();
+
+    // Obtener el límite diario del catálogo
+    const retoInfo = data.retos.find(r => r.nombre === nombreReto);
+    const limitePermitido = retoInfo ? parseInt(retoInfo.diario_permitido) : 999;
+
+    // Obtener cuántos intentos lleva hoy
+    const hashHoy = `${nombreAlumno}_${nombreReto}`;
+    const intentosRealizados = data.intentosHoy[hashHoy] || 0;
+
+    // Si ya alcanzó el límite, deshabilitar el botón 1
+    if (intentosRealizados >= limitePermitido) {
+      const btnCamara = document.getElementById('btn-camera');
+      btnCamara.disabled = true;
+      btnCamara.style.background = "#555";
+      btnCamara.style.color = "#999";
+      btnCamara.style.cursor = "not-allowed";
+      btnCamara.innerText = "LÍMITE ALCANZADO";
+      statusText.innerText = `YA USASTE TUS ${limitePermitido} INTENTO(S) DE HOY`;
+      statusText.style.background = "#7f1d1d";
+      statusText.style.color = "#fff";
+    } else {
+      const btnCamara = document.getElementById('btn-camera');
+      btnCamara.disabled = false;
+      btnCamara.style.background = "#FFD700";
+      btnCamara.style.color = "#000";
+      btnCamara.style.cursor = "pointer";
+    }
+  } catch (err) {
+    console.error("Error al verificar intentos:", err);
+  }
+}
+
+verificarIntentosHoy();
+// ─────────────────────────────────────────────────────────────
+    
+    // ── REGRESO AL PORTAL CON PARÁMETROS ORIGINALES ──────────────
+function regresarPortal() {
+  const base = "https://americordzn-karate.github.io/retos/";
+  const params = new URLSearchParams(window.location.search);
+  window.location.href = base + "?" + params.toString();
+}
+// ─────────────────────────────────────────────────────────────
+  </script>
+</body>
+</html>
