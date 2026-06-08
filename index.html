@@ -261,6 +261,7 @@
         golpeExtendido = false;
         baseDesplazada = false;
         modo = "TEST_ACTIVO";
+      capFig();
 
         if (currentLandmarks) {
             const idxPieApoyo = (selectedArm === 'R') ? 31 : 32;
@@ -348,6 +349,23 @@
       document.getElementById('btn-start-test').style.display = "block";
       statusText.innerText = "MUEVA EL PIE O PRESIONE INICIAR PARA ARRANCAR";
     }
+
+// ── CAP fig ───────────────────────
+    let fotoBase64 = null;
+    function capFig() {
+      try {
+        const snapCanvas = document.createElement('canvas');
+        snapCanvas.width = canvasElement.width;
+        snapCanvas.height = canvasElement.height;
+        const snapCtx = snapCanvas.getContext('2d');
+        snapCtx.drawImage(videoElement, 0, 0, snapCanvas.width, snapCanvas.height);
+        fotoBase64 = snapCanvas.toDataURL('image/jpeg', 0.4);
+      } catch(e) {
+        fotoBase64 = null;
+      }
+    }
+    // ─────────────────────────────────────────────────────────────
+    
     // ── LECTURA DE PARÁMETROS DESDE URL ──────────────────────────
 const urlParams = new URLSearchParams(window.location.search);
 const paramNombre   = urlParams.get('nombre');
